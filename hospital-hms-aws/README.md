@@ -67,23 +67,80 @@ docker build -t <account-id>.dkr.ecr.eu-west-3.amazonaws.com/backend:local -f Do
 
 Push the images with `docker push` once authenticated against Amazon ECR.
 
-## Deploying with Helm
+## Deploying to Amazon EKS
 
-Package and deploy the umbrella chart once your cluster context is configured:
+Follow the steps below to deploy the frontend and backend workloads into an existing Amazon EKS cluster.
 
-```bash
-helm upgrade --install hms infra/helm -n hms-prod -f infra/helm/values.yaml
-```
+### 1. Configure your local environment
 
-The chart provisions ConfigMaps that render an `app-config.js` file consumed by the frontend and injects all backend environment variables, autoscalers, PodDisruptionBudgets, and network policies.
+1. Install the AWS CLI (`aws`), `kubectl`, and `helm` on your workstation or CI runner.
+2. Authenticate with AWS and update the kubeconfig for the target cluster:
 
-### Database password secret
+   ```bash
+   aws configure
+   aws eks update-kubeconfig --name <cluster-name> --region <aws-region>
+   ```
 
-Create the database password secret referenced by the chart before deploying:
+3. Confirm connectivity by listing the cluster nodes: `kubectl get nodes`.
+
+### 2. Prepare application configuration
+
+1. Copy `infra/helm/values.yaml` to an environment-specific file (e.g. `infra/helm/values-prod.yaml`).
+2. Update the following sections with the infrastructure you provisioned earlier:
+   - `global.hostedZone` and `global.domain` for the external ALB DNS records.
+   - `frontend.config` entries for the Cognito user pool, identity pool, and API URLs.
+   - `backend.env` variables including `DATABASE_URL`, `S3_BUCKET`, `DYNAMODB_TABLE`, and AWS service ARNs.
+
+### 3. Build and push container images
+
+1. Authenticate Docker to Amazon ECR: `aws ecr get-login-password --region <aws-region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<aws-region>.amazonaws.com`.
+2. Build the production images from the monorepo:
+
+   ```bash
+   # Frontend
+   cd apps/frontend
+   docker build -t <account-id>.dkr.ecr.<aws-region>.amazonaws.com/frontend:<tag> -f Dockerfile.production .
+
+   # Backend
+   cd ../backend
+   docker build -t <account-id>.dkr.ecr.<aws-region>.amazonaws.com/backend:<tag> -f Dockerfile.production .
+   ```
+
+3. Push the images to ECR with `docker push` for each tag.
+4. Update your Helm values file so `frontend.image.tag` and `backend.image.tag` match the pushed `<tag>`.
+
+### 4. Create Kubernetes secrets
+
+Create the database password secret and any other sensitive values referenced in the chart:
 
 ```bash
 kubectl -n hms-prod create secret generic hms-db-password --from-literal=DB_PASSWORD='StrongPassword!'
+kubectl -n hms-prod create secret generic hms-backend-env --from-literal=JWT_SECRET='<random-value>'
 ```
+
+Supply additional secrets (for example, third-party API keys) as key/value pairs or sealed secrets according to your security requirements.
+
+### 5. Deploy the Helm chart
+
+Install or upgrade the umbrella chart using the environment-specific values file created earlier:
+
+```bash
+helm upgrade --install hms infra/helm \
+  --namespace hms-prod \
+  --create-namespace \
+  -f infra/helm/values-prod.yaml
+```
+
+The chart provisions ConfigMaps that render an `app-config.js` file consumed by the frontend, injects backend environment variables, and creates autoscalers, PodDisruptionBudgets, and network policies.
+
+### 6. Verify the deployment
+
+```bash
+kubectl -n hms-prod get pods
+kubectl -n hms-prod get ingress
+```
+
+Wait for the AWS Load Balancer Controller to provision an ALB, then map the generated DNS name to your domain via Route 53 (or update your external DNS solution).
 
 ## Disaster recovery considerations
 

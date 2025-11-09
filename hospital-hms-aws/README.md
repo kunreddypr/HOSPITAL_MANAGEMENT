@@ -53,37 +53,77 @@ npm run prisma:generate
 npm run dev
 ```
 
-## Building and pushing Docker images locally
+## Running in Amazon AWS
+
+Follow these steps to take the application from containers on your workstation to a production-grade deployment on Amazon EKS.
+
+### 1. Authenticate and prepare registries
+
+```bash
+aws ecr get-login-password --region <region> | docker login --username AWS --password-stdin <account-id>.dkr.ecr.<region>.amazonaws.com
+aws ecr describe-repositories --repository-names frontend backend || \
+  aws ecr create-repository --repository-name frontend && \
+  aws ecr create-repository --repository-name backend
+```
+
+### 2. Build Docker images
 
 ```bash
 # Frontend
 cd apps/frontend
-docker build -t <account-id>.dkr.ecr.eu-west-3.amazonaws.com/frontend:local -f Dockerfile.production .
+docker build -t <account-id>.dkr.ecr.<region>.amazonaws.com/frontend:<tag> -f Dockerfile.production .
 
 # Backend
 cd ../backend
-docker build -t <account-id>.dkr.ecr.eu-west-3.amazonaws.com/backend:local -f Dockerfile.production .
+docker build -t <account-id>.dkr.ecr.<region>.amazonaws.com/backend:<tag> -f Dockerfile.production .
 ```
 
-Push the images with `docker push` once authenticated against Amazon ECR.
-
-## Deploying with Helm
-
-Package and deploy the umbrella chart once your cluster context is configured:
+### 3. Push images to ECR
 
 ```bash
-helm upgrade --install hms infra/helm -n hms-prod -f infra/helm/values.yaml
+docker push <account-id>.dkr.ecr.<region>.amazonaws.com/frontend:<tag>
+docker push <account-id>.dkr.ecr.<region>.amazonaws.com/backend:<tag>
 ```
 
-The chart provisions ConfigMaps that render an `app-config.js` file consumed by the frontend and injects all backend environment variables, autoscalers, PodDisruptionBudgets, and network policies.
-
-### Database password secret
-
-Create the database password secret referenced by the chart before deploying:
+### 4. Configure cluster access
 
 ```bash
-kubectl -n hms-prod create secret generic hms-db-password --from-literal=DB_PASSWORD='StrongPassword!'
+aws eks --region <region> update-kubeconfig --name <cluster-name>
+kubectl config set-context --current --namespace=hms-prod
 ```
+
+Ensure the `aws-load-balancer-controller` is running and that the `hms-prod` namespace exists (create it with `kubectl create namespace hms-prod` if required).
+
+### 5. Create required secrets and config maps
+
+```bash
+kubectl -n hms-prod create secret generic hms-db-password --from-literal=DB_PASSWORD='StrongPassword!' --dry-run=client -o yaml | kubectl apply -f -
+kubectl -n hms-prod create secret generic hms-backend --from-env-file=infra/helm/secrets/backend.env --dry-run=client -o yaml | kubectl apply -f -
+```
+
+Update `infra/helm/secrets/backend.env` with production environment variables (Cognito IDs, S3 bucket, DynamoDB table, etc.) before applying.
+
+### 6. Deploy with Helm
+
+```bash
+helm upgrade --install hms infra/helm \
+  --namespace hms-prod \
+  --set imageTags.frontend=<tag> \
+  --set imageTags.backend=<tag> \
+  -f infra/helm/values.yaml
+```
+
+The umbrella chart rolls out the frontend and backend services, provisions ConfigMaps that render the `app-config.js` file, and wires autoscaling, PodDisruptionBudgets, and network policies.
+
+### 7. Verify the rollout
+
+```bash
+kubectl get pods
+kubectl get svc
+kubectl describe ingress hms-frontend
+```
+
+Navigate to the DNS name exposed by the AWS Application Load Balancer once the ingress status shows an address.
 
 ## Disaster recovery considerations
 

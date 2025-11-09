@@ -1,0 +1,16 @@
+# Copy this file to terraform.tfvars and customise the values below.
+project_name              = "hospital-hms"
+environment               = "prod"
+primary_region            = "us-east-1"
+dr_region                 = "us-west-2"
+aws_profile               = "default"
+route53_zone_id           = "Z1234567890"
+route53_record_name       = "hms.example.com"
+primary_certificate_arn   = "arn:aws:acm:us-east-1:123456789012:certificate/primary"
+dr_certificate_arn        = "arn:aws:acm:us-west-2:123456789012:certificate/dr"
+primary_health_check_fqdn = "hms.example.com"
+dr_health_check_fqdn      = "dr.hms.example.com"
+aurora_master_password    = "ChangeMe123!"
+cognito_callback_urls     = ["https://hms.example.com/callback"]
+cognito_logout_urls       = ["https://hms.example.com"]
+github_repository         = "org/repo"

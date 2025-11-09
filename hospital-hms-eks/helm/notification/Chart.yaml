@@ -1,0 +1,5 @@
+apiVersion: v2
+name: notification
+version: 0.1.0
+appVersion: "1.0.0"
+description: Notification service for the Hospital Management System

@@ -1,0 +1,32 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "notification.fullname" . }}
+  annotations:
+    alb.ingress.kubernetes.io/scheme: {{ .Values.ingress.alb.scheme | quote }}
+    alb.ingress.kubernetes.io/target-type: {{ .Values.ingress.alb.target_type | quote }}
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/actions.ssl-redirect: '{"Type":"redirect","RedirectConfig":{"Protocol":"HTTPS","Port":"443","StatusCode":"HTTP_301"}}'
+    alb.ingress.kubernetes.io/group.name: hms
+    alb.ingress.kubernetes.io/certificate-arn: {{ .Values.ingress.alb.cert_arn | quote }}
+    {{- if .Values.ingress.alb.load_balancer_name }}
+    alb.ingress.kubernetes.io/load-balancer-name: {{ .Values.ingress.alb.load_balancer_name | quote }}
+    {{- end }}
+  labels:
+    app.kubernetes.io/name: {{ include "notification.name" . }}
+    app.kubernetes.io/instance: {{ .Release.Name }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  rules:
+    - host: {{ .Values.ingress.host }}
+      http:
+        paths:
+          - path: {{ .Values.ingress.path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ include "notification.fullname" . }}
+                port:
+                  name: http
+{{- end }}

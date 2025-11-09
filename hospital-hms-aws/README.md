@@ -69,6 +69,36 @@ Push the images with `docker push` once authenticated against Amazon ECR.
 
 ## Deploying to Amazon EKS
 
+You can now provision the required AWS infrastructure with the Terraform module located in `infra/terraform`.
+
+### Option A – Terraform automated provisioning
+
+1. Change into the Terraform directory and initialize:
+
+   ```bash
+   cd infra/terraform
+   terraform init
+   ```
+
+2. Review the plan and apply the changes (override variables as needed for your AWS account/region):
+
+   ```bash
+   terraform plan -out plan.tfplan
+   terraform apply plan.tfplan
+   ```
+
+   The module provisions a VPC, EKS cluster, managed node group, Amazon ECR repositories, and the AWS Load Balancer Controller. Enable the `deploy_helm_release` variable to have Terraform roll out the bundled Helm chart once your container images are pushed.
+
+3. Update your kubeconfig to talk to the new cluster:
+
+   ```bash
+   aws eks update-kubeconfig \
+     --name $(terraform output -raw cluster_name) \
+     --region $(terraform output -raw region)
+   ```
+
+### Option B – Manual deployment to an existing cluster
+
 Follow the steps below to deploy the frontend and backend workloads into an existing Amazon EKS cluster.
 
 ### 1. Configure your local environment

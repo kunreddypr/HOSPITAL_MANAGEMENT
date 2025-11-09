@@ -1,0 +1,13 @@
+# Requires the Kubernetes Vertical Pod Autoscaler operator to be installed in the cluster.
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: hms-backend
+  namespace: hms-prod
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: hms-backend
+  updatePolicy:
+    updateMode: "Auto"

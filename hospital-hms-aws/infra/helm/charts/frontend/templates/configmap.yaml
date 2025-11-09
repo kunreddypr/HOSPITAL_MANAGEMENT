@@ -1,0 +1,18 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ .Values.global.appName }}-frontend-config
+  labels:
+    app.kubernetes.io/name: {{ .Values.global.appName }}-frontend
+    app.kubernetes.io/part-of: {{ .Values.global.appName }}
+data:
+  app-config.js: |
+    window.__APP_CONFIG__ = {
+      apiBaseUrl: "https://{{ .Values.global.domain }}/api",
+      region: "{{ .Values.global.region }}",
+      cognito: {
+        userPoolId: "{{ .Values.global.cognito.userPoolId }}",
+        clientId: "{{ .Values.global.cognito.clientId }}",
+        domain: "{{ .Values.global.cognito.domain }}"
+      }
+    };

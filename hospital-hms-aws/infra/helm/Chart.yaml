@@ -1,0 +1,12 @@
+apiVersion: v2
+name: hospital-hms-aws
+version: 0.1.0
+description: Umbrella chart for Hospital HMS workloads on AWS EKS
+type: application
+dependencies:
+  - name: frontend
+    version: 0.1.0
+    repository: "file://charts/frontend"
+  - name: backend
+    version: 0.1.0
+    repository: "file://charts/backend"

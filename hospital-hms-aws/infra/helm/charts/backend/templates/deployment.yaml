@@ -1,0 +1,47 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Values.global.appName }}-backend
+  labels:
+    app.kubernetes.io/name: {{ .Values.global.appName }}-backend
+    app.kubernetes.io/part-of: {{ .Values.global.appName }}
+spec:
+  replicas: {{ .Values.replicaCount }}
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: {{ .Values.global.appName }}-backend
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: {{ .Values.global.appName }}-backend
+        app.kubernetes.io/part-of: {{ .Values.global.appName }}
+    spec:
+      containers:
+        - name: backend
+          image: {{ printf "%s/backend:%s" .Values.global.image.registry .Values.global.image.tag }}
+          ports:
+            - containerPort: 8080
+          env:
+            - name: PORT
+              value: "8080"
+            - name: DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: {{ .Values.global.postgres.passwordSecretName }}
+                  key: DB_PASSWORD
+          envFrom:
+            - configMapRef:
+                name: {{ .Values.global.appName }}-backend-config
+          resources: {{- toYaml .Values.resources | nindent 12 }}
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 10
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 30

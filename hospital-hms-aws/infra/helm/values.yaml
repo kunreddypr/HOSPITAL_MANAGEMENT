@@ -1,0 +1,30 @@
+global:
+  appName: hms
+  domain: hms.example.com
+  region: eu-west-3
+  image:
+    registry: <ECR_ACCOUNT_ID>.dkr.ecr.eu-west-3.amazonaws.com
+    tag: "v1.0.0"
+  ingress:
+    className: alb
+    hosts:
+      - host: hms.example.com
+        paths:
+          - path: /
+            service: frontend
+          - path: /api
+            service: backend
+  cognito:
+    userPoolId: CHANGEME
+    clientId: CHANGEME
+    domain: https://example.auth.eu-west-3.amazoncognito.com
+    jwksUrl: https://cognito-idp.eu-west-3.amazonaws.com/CHANGEME/.well-known/jwks.json
+  s3:
+    bucket: hms-data-prod
+  dynamodb:
+    table: hms-audit-prod
+  postgres:
+    host: aurora-writer.example
+    db: hms
+    user: hms
+    passwordSecretName: hms-db-password

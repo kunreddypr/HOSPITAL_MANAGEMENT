@@ -1,0 +1,44 @@
+{{- $ingress := .Values.global.ingress -}}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ .Values.global.appName }}-ingress
+  annotations:
+    kubernetes.io/ingress.class: {{ $ingress.className | quote }}
+    alb.ingress.kubernetes.io/scheme: internet-facing
+    alb.ingress.kubernetes.io/target-type: ip
+    alb.ingress.kubernetes.io/listen-ports: '[{"HTTP":80},{"HTTPS":443}]'
+    alb.ingress.kubernetes.io/actions.ssl-redirect: >-
+      {"Type":"redirect","RedirectConfig":{"Protocol":"HTTPS","Port":"443","StatusCode":"HTTP_301"}}
+    alb.ingress.kubernetes.io/group.name: {{ .Values.global.appName }}
+spec:
+  ingressClassName: {{ $ingress.className }}
+  rules:
+    {{- range $host := $ingress.hosts }}
+    - host: {{ $host.host }}
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: ssl-redirect
+                port:
+                  name: use-annotation
+          - path: /healthz
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Values.global.appName }}-frontend
+                port:
+                  number: 80
+          {{- range $host.paths }}
+          - path: {{ .path }}
+            pathType: Prefix
+            backend:
+              service:
+                name: {{ $.Values.global.appName }}-{{ .service }}
+                port:
+                  number: 80
+          {{- end }}
+    {{- end }}

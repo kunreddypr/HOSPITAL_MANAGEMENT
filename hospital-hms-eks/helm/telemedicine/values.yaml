@@ -1,0 +1,33 @@
+image:
+  repository: 000000000000.dkr.ecr.us-east-1.amazonaws.com/hospital-hms-telemedicine
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8443
+
+ingress:
+  enabled: true
+  className: alb
+  host: tele.example.com
+  path: /tele
+  alb:
+    scheme: internet-facing
+    target_type: ip
+    cert_arn: ""
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+resources:
+  limits:
+    cpu: 700m
+    memory: 768Mi
+  requests:
+    cpu: 300m
+    memory: 384Mi
+
+env: []

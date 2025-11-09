@@ -1,0 +1,20 @@
+frontend:
+  image:
+    tag: latest
+  ingress:
+    host: frontend.example.com
+backend:
+  image:
+    tag: latest
+  ingress:
+    host: api.example.com
+telemedicine:
+  image:
+    tag: latest
+  ingress:
+    host: tele.example.com
+notification:
+  image:
+    tag: latest
+  ingress:
+    host: notify.example.com

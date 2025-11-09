@@ -1,0 +1,12 @@
+apiVersion: autoscaling.k8s.io/v1
+kind: VerticalPodAutoscaler
+metadata:
+  name: sample-hms-vpa
+  namespace: hms-prod
+spec:
+  targetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: sample-workload
+  updatePolicy:
+    updateMode: Auto

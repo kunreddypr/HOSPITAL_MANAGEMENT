@@ -1,0 +1,33 @@
+image:
+  repository: 000000000000.dkr.ecr.us-east-1.amazonaws.com/hospital-hms-backend
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8080
+
+ingress:
+  enabled: true
+  className: alb
+  host: api.example.com
+  path: /api
+  alb:
+    scheme: internet-facing
+    target_type: ip
+    cert_arn: ""
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+resources:
+  limits:
+    cpu: 500m
+    memory: 512Mi
+  requests:
+    cpu: 250m
+    memory: 256Mi
+
+env: []

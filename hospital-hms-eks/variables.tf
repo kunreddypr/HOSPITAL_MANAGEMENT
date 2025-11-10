@@ -64,11 +64,6 @@ variable "services_egress_subnet_cidrs" {
   description = "Public egress subnets containing NAT gateways"
   type        = list(string)
   default     = ["10.20.100.0/24", "10.20.101.0/24"]
-
-  validation {
-    condition     = length(var.services_egress_subnet_cidrs) > 0
-    error_message = "At least one services egress subnet CIDR must be provided."
-  }
 }
 
 variable "data_vpc_cidr" {
@@ -111,11 +106,6 @@ variable "services_egress_subnet_cidrs_dr" {
   description = "Public egress subnet CIDRs in the DR services VPC"
   type        = list(string)
   default     = ["10.120.100.0/24"]
-
-  validation {
-    condition     = length(var.services_egress_subnet_cidrs_dr) > 0
-    error_message = "At least one DR services egress subnet CIDR must be provided."
-  }
 }
 
 variable "data_vpc_cidr_dr" {
@@ -239,23 +229,11 @@ variable "route53_record_name" {
 variable "primary_certificate_arn" {
   description = "ACM certificate ARN used by the primary ALB"
   type        = string
-  default     = null
-
-  validation {
-    condition = var.primary_certificate_arn == null || var.primary_certificate_arn == "" || can(regex("^arn:aws[a-zA-Z-]*:acm:", var.primary_certificate_arn))
-    error_message = "Provide a valid ACM certificate ARN (arn:aws:acm:...) or leave the value null/empty to skip HTTPS listener creation."
-  }
 }
 
 variable "dr_certificate_arn" {
   description = "ACM certificate ARN used by the DR ALB"
   type        = string
-  default     = null
-
-  validation {
-    condition = var.dr_certificate_arn == null || var.dr_certificate_arn == "" || can(regex("^arn:aws[a-zA-Z-]*:acm:", var.dr_certificate_arn))
-    error_message = "Provide a valid DR ACM certificate ARN (arn:aws:acm:...) or leave the value null/empty to skip HTTPS listener creation."
-  }
 }
 
 variable "primary_health_check_fqdn" {

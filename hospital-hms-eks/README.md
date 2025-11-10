@@ -70,7 +70,7 @@ The Terraform root module lives at the repository root (`main.tf`, `variables.tf
    - `aurora_master_password`
    - `route53_zone_id`
    - `route53_record_name`
-   - ACM certificate ARNs (set to blank strings to defer HTTPS listener creation during initial testing)
+   - ACM certificate ARNs
    - GitHub repository metadata
 2. Initialise Terraform and review the plan:
    ```bash

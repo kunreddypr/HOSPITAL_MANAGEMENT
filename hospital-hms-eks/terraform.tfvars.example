@@ -6,7 +6,6 @@ dr_region                 = "us-west-2"
 aws_profile               = "default"
 route53_zone_id           = "Z1234567890"
 route53_record_name       = "hms.example.com"
-# Leave blank strings to skip HTTPS listener creation until certificates are ready.
 primary_certificate_arn   = "arn:aws:acm:us-east-1:123456789012:certificate/primary"
 dr_certificate_arn        = "arn:aws:acm:us-west-2:123456789012:certificate/dr"
 primary_health_check_fqdn = "hms.example.com"

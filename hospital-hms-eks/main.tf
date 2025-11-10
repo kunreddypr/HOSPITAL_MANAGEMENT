@@ -162,17 +162,10 @@ resource "aws_route_table_association" "edge_public" {
 }
 
 resource "aws_route_table" "services_private" {
-  for_each = aws_subnet.services_private
+  for_each = aws_nat_gateway.services
 
   vpc_id = aws_vpc.services.id
   tags   = merge(local.tags, { Name = "${local.project}-services-private-rt-${each.key}" })
-
-  lifecycle {
-    precondition {
-      condition     = length(aws_nat_gateway.services) > 0
-      error_message = "Define at least one services NAT gateway subnet (services_egress_subnet_cidrs)."
-    }
-  }
 }
 
 resource "aws_route" "services_private_nat" {
@@ -180,12 +173,7 @@ resource "aws_route" "services_private_nat" {
 
   route_table_id         = each.value.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id = aws_nat_gateway.services[
-    element(
-      keys(aws_nat_gateway.services),
-      length(aws_nat_gateway.services) > 0 ? tonumber(each.key) % length(aws_nat_gateway.services) : 0
-    )
-  ].id
+  nat_gateway_id         = aws_nat_gateway.services[each.key].id
 }
 
 resource "aws_route" "services_private_to_data" {
@@ -252,7 +240,7 @@ resource "aws_route" "data_to_services" {
 }
 
 resource "aws_route" "data_to_edge" {
-  route_table_id         = aws_route_table.data_private.id
+route_table_id         = aws_route_table.data_private.id
   destination_cidr_block = var.edge_vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.this.id
 }
@@ -612,52 +600,38 @@ resource "aws_elasticache_replication_group" "redis" {
 resource "aws_s3_bucket" "medical_reports" {
   bucket = "${var.project_name}-${var.environment}-medical-reports"
 
-  tags = merge(local.tags, { Name = "${local.project}-reports" })
-}
-
-resource "aws_s3_bucket_versioning" "medical_reports" {
-  bucket = aws_s3_bucket.medical_reports.id
-
-  versioning_configuration {
-    status = "Enabled"
+  versioning {
+    enabled = true
   }
-}
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "medical_reports" {
-  bucket = aws_s3_bucket.medical_reports.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "aws:kms"
+      }
     }
   }
+
+  tags = merge(local.tags, { Name = "${local.project}-reports" })
 }
 
 resource "aws_s3_bucket" "medical_reports_dr" {
   provider = aws.dr
   bucket   = "${var.project_name}-${var.environment}-medical-reports-dr"
 
-  tags = merge(local.tags, { Name = "${local.project}-reports-dr" })
-}
-
-resource "aws_s3_bucket_versioning" "medical_reports_dr" {
-  provider = aws.dr
-  bucket   = aws_s3_bucket.medical_reports_dr.id
-
-  versioning_configuration {
-    status = "Enabled"
+  versioning {
+    enabled = true
   }
-}
 
-resource "aws_s3_bucket_server_side_encryption_configuration" "medical_reports_dr" {
-  provider = aws.dr
-  bucket   = aws_s3_bucket.medical_reports_dr.id
-
-  rule {
-    apply_server_side_encryption_by_default {
-      sse_algorithm = "aws:kms"
+  server_side_encryption_configuration {
+    rule {
+      apply_server_side_encryption_by_default {
+        sse_algorithm = "aws:kms"
+      }
     }
   }
+
+  tags = merge(local.tags, { Name = "${local.project}-reports-dr" })
 }
 
 resource "aws_s3_bucket_replication_configuration" "reports" {
@@ -675,14 +649,7 @@ resource "aws_s3_bucket_replication_configuration" "reports" {
     }
   }
 
-  depends_on = [
-    aws_s3_bucket.medical_reports,
-    aws_s3_bucket.medical_reports_dr,
-    aws_s3_bucket_versioning.medical_reports,
-    aws_s3_bucket_versioning.medical_reports_dr,
-    aws_s3_bucket_server_side_encryption_configuration.medical_reports,
-    aws_s3_bucket_server_side_encryption_configuration.medical_reports_dr
-  ]
+  depends_on = [aws_s3_bucket.medical_reports, aws_s3_bucket.medical_reports_dr]
 }
 
 resource "aws_iam_role" "s3_replication" {
@@ -796,8 +763,6 @@ resource "aws_lb_listener" "primary_http" {
 }
 
 resource "aws_lb_listener" "primary_https" {
-  count = var.primary_certificate_arn != null && var.primary_certificate_arn != "" ? 1 : 0
-
   load_balancer_arn = aws_lb.primary.arn
   port              = 443
   protocol          = "HTTPS"
@@ -1101,17 +1066,10 @@ resource "aws_route_table_association" "edge_dr_public" {
 
 resource "aws_route_table" "services_dr_private" {
   provider = aws.dr
-  for_each = aws_subnet.services_dr_private
+  for_each = aws_nat_gateway.services_dr
 
   vpc_id = aws_vpc.services_dr.id
   tags   = merge(local.tags, { Name = "${local.project}-services-dr-private-rt-${each.key}" })
-
-  lifecycle {
-    precondition {
-      condition     = length(aws_nat_gateway.services_dr) > 0
-      error_message = "Define at least one DR services NAT gateway subnet (services_egress_subnet_cidrs_dr)."
-    }
-  }
 }
 
 resource "aws_route" "services_dr_private_nat" {
@@ -1120,12 +1078,7 @@ resource "aws_route" "services_dr_private_nat" {
 
   route_table_id         = each.value.id
   destination_cidr_block = "0.0.0.0/0"
-  nat_gateway_id = aws_nat_gateway.services_dr[
-    element(
-      keys(aws_nat_gateway.services_dr),
-      length(aws_nat_gateway.services_dr) > 0 ? tonumber(each.key) % length(aws_nat_gateway.services_dr) : 0
-    )
-  ].id
+  nat_gateway_id         = aws_nat_gateway.services_dr[each.key].id
 }
 
 resource "aws_route" "services_dr_to_data" {
@@ -1445,9 +1398,7 @@ resource "aws_lb_listener" "dr_http" {
 }
 
 resource "aws_lb_listener" "dr_https" {
-  provider = aws.dr
-  count    = var.dr_certificate_arn != null && var.dr_certificate_arn != "" ? 1 : 0
-
+  provider          = aws.dr
   load_balancer_arn = aws_lb.dr.arn
   port              = 443
   protocol          = "HTTPS"

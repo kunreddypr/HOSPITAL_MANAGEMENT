@@ -1,0 +1,33 @@
+image:
+  repository: 000000000000.dkr.ecr.us-east-1.amazonaws.com/hospital-hms-notification
+  tag: latest
+  pullPolicy: IfNotPresent
+
+service:
+  type: ClusterIP
+  port: 8081
+
+ingress:
+  enabled: true
+  className: alb
+  host: notify.example.com
+  path: /notify
+  alb:
+    scheme: internet-facing
+    target_type: ip
+    cert_arn: ""
+
+autoscaling:
+  minReplicas: 2
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 60
+
+resources:
+  limits:
+    cpu: 300m
+    memory: 384Mi
+  requests:
+    cpu: 150m
+    memory: 192Mi
+
+env: []

@@ -1,0 +1,139 @@
+name: Deploy HMS to EKS
+
+on:
+  push:
+    branches:
+      - main
+
+permissions:
+  id-token: write
+  contents: read
+  actions: read
+
+env:
+  AWS_PRIMARY_REGION: ${{ vars.AWS_PRIMARY_REGION || 'us-east-1' }}
+  AWS_DR_REGION: ${{ vars.AWS_DR_REGION || 'us-west-2' }}
+  PROJECT_ROOT: hospital-hms-eks
+  HELM_NAMESPACE: hms-prod
+  IMAGE_TAG: ${{ github.sha }}
+
+jobs:
+  deploy:
+    name: Build, Provision, Deploy
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+          cache-dependency-path: |
+            hospital-hms-aws/apps/frontend/package-lock.json
+            hospital-hms-aws/apps/backend/package-lock.json
+            hospital-hms-aws/apps/telemedicine/package-lock.json
+            hospital-hms-aws/apps/notification/package-lock.json
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ secrets.AWS_DEPLOY_ROLE_ARN }}
+          aws-region: ${{ env.AWS_PRIMARY_REGION }}
+
+      - name: Login to Amazon ECR
+        id: login-ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Build and push frontend image
+        working-directory: hospital-hms-aws/apps/frontend
+        run: |
+          npm ci
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/hospital-hms-frontend:${{ env.IMAGE_TAG }} .
+          docker push ${{ steps.login-ecr.outputs.registry }}/hospital-hms-frontend:${{ env.IMAGE_TAG }}
+
+      - name: Build and push backend image
+        working-directory: hospital-hms-aws/apps/backend
+        run: |
+          npm ci
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/hospital-hms-backend:${{ env.IMAGE_TAG }} .
+          docker push ${{ steps.login-ecr.outputs.registry }}/hospital-hms-backend:${{ env.IMAGE_TAG }}
+
+      - name: Build and push telemedicine image
+        working-directory: hospital-hms-aws/apps/telemedicine
+        run: |
+          npm ci
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/hospital-hms-telemedicine:${{ env.IMAGE_TAG }} .
+          docker push ${{ steps.login-ecr.outputs.registry }}/hospital-hms-telemedicine:${{ env.IMAGE_TAG }}
+
+      - name: Build and push notification image
+        working-directory: hospital-hms-aws/apps/notification
+        run: |
+          npm ci
+          docker build -t ${{ steps.login-ecr.outputs.registry }}/hospital-hms-notification:${{ env.IMAGE_TAG }} .
+          docker push ${{ steps.login-ecr.outputs.registry }}/hospital-hms-notification:${{ env.IMAGE_TAG }}
+
+      - name: Terraform Init
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: terraform init
+
+      - name: Terraform Apply
+        working-directory: ${{ env.PROJECT_ROOT }}
+        env:
+          TF_VAR_image_tag: ${{ env.IMAGE_TAG }}
+          TF_VAR_github_repository: ${{ github.repository }}
+          TF_VAR_github_branch: ${{ github.ref_name }}
+          TF_VAR_aurora_master_password: ${{ secrets.AURORA_MASTER_PASSWORD }}
+          TF_VAR_route53_zone_id: ${{ secrets.ROUTE53_ZONE_ID }}
+          TF_VAR_route53_record_name: ${{ vars.ROUTE53_RECORD_NAME }}
+          TF_VAR_primary_certificate_arn: ${{ secrets.PRIMARY_CERT_ARN }}
+          TF_VAR_dr_certificate_arn: ${{ secrets.DR_CERT_ARN }}
+          TF_VAR_primary_health_check_fqdn: ${{ vars.PRIMARY_HEALTH_FQDN }}
+          TF_VAR_dr_health_check_fqdn: ${{ vars.DR_HEALTH_FQDN }}
+          TF_VAR_cognito_callback_urls: ${{ vars.COGNITO_CALLBACK_URLS }}
+          TF_VAR_cognito_logout_urls: ${{ vars.COGNITO_LOGOUT_URLS }}
+        run: terraform apply -auto-approve
+
+      - name: Read EKS cluster name
+        id: cluster
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: echo "eks_name=$(terraform output -raw eks_cluster_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Read primary ALB name
+        id: alb
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: echo "alb_name=$(terraform output -raw primary_alb_name)" >> "$GITHUB_OUTPUT"
+
+      - name: Update kubeconfig
+        run: aws eks update-kubeconfig --region ${{ env.AWS_PRIMARY_REGION }} --name ${{ steps.cluster.outputs.eks_name }}
+
+      - name: Build Helm dependencies
+        working-directory: ${{ env.PROJECT_ROOT }}/helm
+        run: helm dependency update
+
+      - name: Helm upgrade HMS stack
+        working-directory: ${{ env.PROJECT_ROOT }}
+        run: |
+          helm upgrade --install hms helm --namespace ${{ env.HELM_NAMESPACE }} --create-namespace \
+            --set frontend.image.repository=${{ steps.login-ecr.outputs.registry }}/hospital-hms-frontend \
+            --set frontend.image.tag=${{ env.IMAGE_TAG }} \
+            --set frontend.ingress.host=${{ vars.ROUTE53_RECORD_NAME }} \
+            --set frontend.ingress.alb.load_balancer_name=${{ steps.alb.outputs.alb_name }} \
+            --set frontend.ingress.alb.cert_arn=${{ secrets.PRIMARY_CERT_ARN }} \
+            --set backend.image.repository=${{ steps.login-ecr.outputs.registry }}/hospital-hms-backend \
+            --set backend.image.tag=${{ env.IMAGE_TAG }} \
+            --set backend.ingress.host=${{ vars.ROUTE53_RECORD_NAME }} \
+            --set backend.ingress.alb.load_balancer_name=${{ steps.alb.outputs.alb_name }} \
+            --set backend.ingress.alb.cert_arn=${{ secrets.PRIMARY_CERT_ARN }} \
+            --set telemedicine.image.repository=${{ steps.login-ecr.outputs.registry }}/hospital-hms-telemedicine \
+            --set telemedicine.image.tag=${{ env.IMAGE_TAG }} \
+            --set telemedicine.ingress.host=${{ vars.ROUTE53_RECORD_NAME }} \
+            --set telemedicine.ingress.alb.load_balancer_name=${{ steps.alb.outputs.alb_name }} \
+            --set telemedicine.ingress.alb.cert_arn=${{ secrets.PRIMARY_CERT_ARN }} \
+            --set notification.image.repository=${{ steps.login-ecr.outputs.registry }}/hospital-hms-notification \
+            --set notification.image.tag=${{ env.IMAGE_TAG }} \
+            --set notification.ingress.host=${{ vars.ROUTE53_RECORD_NAME }} \
+            --set notification.ingress.alb.load_balancer_name=${{ steps.alb.outputs.alb_name }} \
+            --set notification.ingress.alb.cert_arn=${{ secrets.PRIMARY_CERT_ARN }}

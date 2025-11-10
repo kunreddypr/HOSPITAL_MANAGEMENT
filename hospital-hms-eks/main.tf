@@ -240,7 +240,7 @@ resource "aws_route" "data_to_services" {
 }
 
 resource "aws_route" "data_to_edge" {
-  route_table_id         = aws_route_table.data_private.id
+route_table_id         = aws_route_table.data_private.id
   destination_cidr_block = var.edge_vpc_cidr
   transit_gateway_id     = aws_ec2_transit_gateway.this.id
 }
